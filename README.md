@@ -2,64 +2,61 @@
 
 ## Objetivo
 
-Crear un entorno de pruebas aislado mediante VirtualBox para practicar conceptos de ciberseguridad sin poner en riesgo el equipo anfitrión.
+Crear un entorno de pruebas aislado mediante VirtualBox para practicar conceptos de ciberseguridad sin poner en riesgo el equipo anfitrión (Host).
 
 ## Entorno utilizado
 
-* **Equipo anfitrión (Host):** MacBook Pro con macOS y procesador Apple Silicon M2.
-* **Hipervisor:** Oracle VirtualBox 7.2.10.
-* **Extension Pack:** Oracle VirtualBox Extension Pack 7.2.10.
-* **Sistema invitado (Guest):** Ubuntu Desktop 26.04 ARM64.
-* **Nombre de la máquina virtual:** `Ubuntu-CiberLab-ARM`.
-* **Memoria RAM asignada:** 3139 MB.
-* **Procesadores asignados:** 2.
-* **Disco virtual:** 25 GB.
-* **Firmware de arranque:** EFI habilitado.
+- **Host:** MacBook Pro con macOS y procesador Apple Silicon (M2).
+- **Hipervisor:** Oracle VirtualBox 7.2.10.
+- **Sistema invitado (Guest):** Ubuntu 25.04 (ARM64).
+- **Nombre de la VM:** `Ubuntu-CiberLab-ARM` — 2 CPU, ~3 GB RAM, disco de 25 GB.
 
-## Configuración de red
+## 1. Red en modo NAT
 
-La máquina virtual fue configurada con el modo **Red interna** y con el siguiente nombre de red:
+La máquina virtual se configuró con el **Adaptador 1 en modo NAT**.
 
-```text
-lab-ciberseguridad
-```
+![Configuración NAT](capturas/01-red-nat.png)
 
-![Configuración de red interna](capturas/01-red-interna.png)
+**Por qué elegí NAT:** con NAT la VM puede salir a Internet (necesario para actualizar el sistema) pero queda escondida detrás del Host; el resto de los dispositivos de mi red doméstica no la ven como un equipo más.
 
-## Justificación técnica
+- Descarté el **Adaptador Puente (Bridge)** porque expondría la VM como un dispositivo visible dentro de mi red local, algo riesgoso al hacer prácticas de seguridad.
+- Descarté la **Red Interna** porque, si bien es la opción más aislada, deja la VM sin Internet y eso impide actualizar el sistema.
 
-Elegí el modo **Red interna** porque esta práctica inicial no requiere acceso a Internet. Este tipo de red crea un entorno cerrado entre las máquinas virtuales que usen el mismo nombre de red, sin conexión directa con Internet, el equipo anfitrión ni la red doméstica.
+Acá aparece el equilibrio entre **aislamiento y usabilidad**: la Red Interna es más segura pero inutiliza un paso necesario; NAT da el punto justo para esta práctica.
 
-Esta configuración permite reducir el riesgo de que una máquina virtual comprometida pueda comunicarse con otros dispositivos de mi red local, como teléfonos, televisores, otros equipos o el router.
+## 2. Usuario estándar (principio de menor privilegio)
 
-No utilicé el modo **Adaptador Puente (Bridged)** porque conecta la máquina virtual a la misma red física que utiliza el equipo anfitrión. Eso haría que la máquina virtual fuera visible como otro dispositivo dentro de la red doméstica y aumentaría el riesgo durante prácticas de ciberseguridad.
+Se creó el usuario `practicas` como cuenta **Estándar**, separada de la cuenta administradora (`santiago`). La idea es trabajar en el día a día sin permisos de administrador, de modo que un error propio o un programa malicioso no comprometa todo el sistema.
 
-Como medidas adicionales de aislamiento, se configuró lo siguiente:
+![Usuario estándar](capturas/02-usuario-estandar.png)
 
-* Portapapeles compartido deshabilitado.
-* Arrastrar y soltar deshabilitado.
-* Sin carpetas compartidas entre el Host y el Guest.
-* Sin acceso a Internet desde la VM.
+## 3. Actualización del sistema (intento y diagnóstico)
 
-## Snapshot inicial
+Se ejecutó `sudo apt update` y `sudo apt upgrade` desde la cuenta administradora. La actualización **no pudo completarse**: la VM no obtuvo conexión a Internet a través del NAT.
 
-Luego de instalar Ubuntu y configurar el aislamiento de red, se creó una instantánea llamada:
+Diagnóstico realizado desde la terminal:
 
-```text
-Instalación Base Limpia
-```
+- `ping -c 3 8.8.8.8` → respuesta "La red es inaccesible".
+- `ip a` → la interfaz recibió una dirección **APIPA (169.254.x.x)**, que es la que el sistema se autoasigna cuando el servidor DHCP del NAT no le entrega una IP válida.
+- `ip route` → **no aparece una ruta por defecto** (default gateway), por eso no hay salida a Internet.
 
-Esta instantánea funciona como un punto de restauración. Antes de hacer pruebas, instalar herramientas o ejecutar configuraciones experimentales, puedo volver a este estado seguro sin tener que reinstalar todo el sistema operativo.
+![Diagnóstico de red](capturas/03-actualizacion-error-red.png)
 
-![Snapshot Instalación Base Limpia](capturas/02-snapshot-instalacion-base-limpia.png)
+Esto corresponde a una **limitación conocida del NAT de VirtualBox sobre Apple Silicon (ARM)**, no a un error de configuración del laboratorio. Gracias al snapshot del punto 4, la actualización se puede reintentar más adelante sin rehacer todo el entorno.
+
+## 4. Snapshot "Hardening Inicial"
+
+Con la VM apagada se tomó una instantánea llamada **Hardening Inicial**, después de configurar la red en NAT y crear el usuario estándar. Funciona como punto de restauración para volver a un estado seguro antes de cualquier prueba.
+
+![Snapshot Hardening Inicial](capturas/04-snapshot-hardening-inicial.png)
 
 ## Buenas prácticas aplicadas
 
-* Uso de una imagen oficial de Ubuntu Desktop ARM64 compatible con Apple Silicon.
-* Recursos moderados para no afectar el rendimiento del equipo anfitrión.
-* Red interna aislada.
-* Sin adaptador puente.
-* Sin carpetas compartidas.
-* Portapapeles compartido deshabilitado.
-* Arrastrar y soltar deshabilitado.
-* Snapshot creado antes de realizar prácticas de seguridad.
+- Red NAT: la VM sale a Internet pero queda oculta detrás del Host, sin exponerse en la red local.
+- Usuario estándar separado del administrador (menor privilegio).
+- Portapapeles compartido y carpetas compartidas deshabilitados.
+- Snapshot como punto de restauración antes de empezar a practicar.
+
+## Pendiente
+
+- Completar la actualización del sistema una vez resuelta la conexión NAT en el entorno ARM. Al existir el snapshot "Hardening Inicial", el reintento no implica rehacer el laboratorio.
